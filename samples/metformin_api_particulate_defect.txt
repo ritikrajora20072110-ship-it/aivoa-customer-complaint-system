@@ -1,0 +1,30 @@
+CUSTOMER COMPLAINT / RAW MATERIAL REJECTION NOTICE
+Document Ref: QC-EXT-2024-8831
+Date of Notification: 2024-08-20
+
+ORIGIN & CUSTOMER DETAILS:
+- Complaint Source: Customer Quality Audit / Incoming Rejection
+- Customer Name: Apex BioPharma Finished Dosage Manufacturing Ltd.
+- Contact Person: Robert Chen, Head of Raw Material Quality Control
+- Email: r.chen@apexbio.com | Tel: +44 20 7946 0912
+
+PRODUCT & BATCH IDENTIFICATION:
+- Product Name: Metformin Hydrochloride API (Active Pharmaceutical Ingredient)
+- Product Strength / Grade: Bulk Pharmaceutical Grade (USP/Ph.Eur)
+- Batch / Lot Number: MET-API-9921
+- Manufacturing Date: 2024-01-10
+- Expiry Date: 2028-01-09
+- Quantity Affected: 120 kg (3 x 40kg HDPE Fiber Drums)
+- Originating Site Block: API Chemical Synthesis Block 2
+- Impacted Non-Product Materials (NPM): Double Polyethylene Drum Liners & Tamper-Evident Seals
+
+COMPLAINT & DEFECT DETAILS:
+- Complaint Type: Critical Contamination / Foreign Particulate Defect
+- Complaint Date: 2024-08-19
+- Detailed Description:
+Upon sampling and 100% sift testing of Drum #2 and Drum #3 of Batch MET-API-9921 prior to granulation charging, QC analysts identified multiple visible black metallic-like particulate contaminants (>0.5 mm) embedded within the crystalline powder. Microscopic FTIR analysis confirmed the particulate to be 316L stainless steel wear debris, likely originating from a centrifugal mill or drying agitation blade during API micronization.
+
+INITIAL ASSESSMENT & RISK PRIORITY:
+- Initial Severity: Critical
+- Priority: Urgent
+- Patient Safety Impact: Potential injection/tablet contamination risk; complete batch quarantine mandated under 21 CFR Part 211.84.

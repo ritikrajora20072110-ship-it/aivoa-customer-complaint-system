@@ -1,0 +1,29 @@
+PHARMACEUTICAL PACKAGING DEFECT LOG
+Report ID: COMPL-2024-4402
+Reporting Date: 2024-09-02
+
+1. ORIGIN & CUSTOMER DETAILS
+Complaint Source: Commercial Wholesaler & Distributor
+Customer Name: Medix Central Healthcare Logistics Corp.
+Facility Location: Chicago Distribution Center #4
+
+2. PRODUCT & BATCH IDENTIFICATION
+Product Name: Atorvastatin Calcium 20mg Film-Coated Tablets
+Product Strength / Grade: 20mg FDF Tablet
+Batch / Lot Number: ATV-FDF-4402
+Manufacturing Date: 2024-05-18
+Expiry Date: 2027-05-17
+Quantity Affected: 450 units (Secondary Cartons)
+Originating Site Block: Secondary Packaging Block D
+Impacted Non-Product Materials (NPM): Outer Unit Folding Box & Printed Barcode Label
+
+3. COMPLAINT DETAILS
+Complaint Type: Packaging & Labeling Defect
+Complaint Date: 2024-09-01
+Detailed Complaint Description:
+During inbound barcode scanning and optical character verification (OCV), our automated sorting line flagged 450 cartons of Atorvastatin 20mg Lot ATV-FDF-4402. The thermal inkjet printed lot number and expiration date are severely smudged, with the last two digits of the expiry year illegible on 38% of units examined. The internal blister packs have correct stamping; defect is isolated to the secondary carton printing ribbon tension.
+
+4. INITIAL ASSESSMENT & PRIORITY
+Initial Severity: Minor
+Priority: Medium
+Clinical Risk: Low patient risk since blister foil data is intact; regulatory labeling non-conformance under GMP Chapter 5.
