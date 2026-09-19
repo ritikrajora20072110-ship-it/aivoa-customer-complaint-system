@@ -19,6 +19,8 @@ const initialState = {
   priority: 'Pending Triage',
   status: 'Pending Triage',
   risk_level: 'Moderate',
+  suggested_next_action: 'Route to QA Investigation & Issue Replacement',
+  initial_risk_assessment: 'Potential moisture ingress or primary packaging seal failure leading to capsule discoloration. Quarantine affected batch and initiate analytical stability testing.',
   risk_assessment: null,
   completeness: null,
   capa_recommendations: null,
@@ -51,6 +53,15 @@ export const complaintSlice = createSlice({
       if (risk_assessment) {
         state.risk_assessment = risk_assessment;
         state.risk_level = risk_assessment.risk_level || state.risk_level;
+        if (risk_assessment.suggested_severity) {
+          state.initial_severity = risk_assessment.suggested_severity;
+        }
+        if (risk_assessment.suggested_next_action) {
+          state.suggested_next_action = risk_assessment.suggested_next_action;
+        }
+        if (risk_assessment.initial_risk_assessment) {
+          state.initial_risk_assessment = risk_assessment.initial_risk_assessment;
+        }
       }
       if (completeness) {
         state.completeness = completeness;

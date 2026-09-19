@@ -46,3 +46,16 @@ def test_chat():
     data = res.json()
     assert "reply" in data
     assert len(data["reply"]) > 0
+
+def test_conversational_field_update():
+    res = client.post("/api/agent/chat", json={
+        "message": "change username customer name to Rithvik Kumar",
+        "complaint_context": {},
+        "chat_history": []
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert data["updated_fields"] is not None
+    assert data["updated_fields"].get("customer_name") == "Rithvik Kumar"
+    assert "Rithvik Kumar" in data["reply"]
+

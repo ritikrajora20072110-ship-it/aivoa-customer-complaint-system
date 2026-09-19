@@ -62,6 +62,9 @@ class ExtractedComplaintData(BaseModel):
 
 class RiskAssessmentData(BaseModel):
     risk_level: str = "Moderate"
+    suggested_severity: str = "Major"
+    suggested_next_action: str = "Route to QA Investigation & Issue Replacement"
+    initial_risk_assessment: str = ""
     patient_safety_impact: str = ""
     defect_classification: str = ""
     regulatory_recall_risk: str = "Low"

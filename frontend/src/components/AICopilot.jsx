@@ -184,10 +184,18 @@ export default function AICopilot() {
         })
       });
 
+      // Apply conversational field updates directly into Redux state
+      if (data.updated_fields && typeof data.updated_fields === 'object') {
+        Object.entries(data.updated_fields).forEach(([field, value]) => {
+          dispatch(setField({ field, value }));
+        });
+      }
+
       dispatch(addMessage({
         sender: 'bot',
         text: data.reply,
-        suggestions: data.suggested_actions
+        suggestions: data.suggested_actions,
+        updated_fields: data.updated_fields
       }));
     } catch (err) {
       dispatch(addMessage({
@@ -386,6 +394,15 @@ Defect: Hairline fractures along vial neck beneath aluminum flip-off crimp seal 
               }`}
             >
               <div className="whitespace-pre-line">{msg.text}</div>
+              
+              {/* Field update confirmation badge */}
+              {msg.updated_fields && (
+                <div className="mt-2 p-2 rounded-lg bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-[11px] flex items-center space-x-1.5 font-semibold">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                  <span>Form updated: {Object.keys(msg.updated_fields).map(k => k.replace(/_/g, ' ')).join(', ')}</span>
+                </div>
+              )}
+
               <div className={`text-[10px] mt-1.5 text-right ${msg.sender === 'user' ? 'text-blue-200' : 'text-slate-400'}`}>
                 {msg.timestamp}
               </div>

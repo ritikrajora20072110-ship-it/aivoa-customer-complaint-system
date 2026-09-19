@@ -69,21 +69,33 @@ def copilot_chat(request: ChatRequest):
     Interactive conversational Copilot endpoint for asking questions,
     refining complaint data, and querying QMS regulations.
     """
-    reply = run_llm_chat(
+    result = run_llm_chat(
         message=request.message,
         history=request.chat_history or [],
         context=request.complaint_context or {}
     )
     
-    # Suggested follow-up prompt chips
-    suggestions = [
-        "What is the patient health risk under ICH Q9?",
-        "Recommend immediate quarantine actions.",
-        "Check 21 CFR Part 211 regulatory references.",
-        "Draft an executive QMS complaint summary."
-    ]
+    if isinstance(result, dict):
+        reply = result.get("reply", "")
+        updated_fields = result.get("updated_fields")
+        suggestions = result.get("suggested_actions") or [
+            "What is the patient health risk under ICH Q9?",
+            "Recommend immediate quarantine actions.",
+            "Check 21 CFR Part 211 regulatory references.",
+            "Draft an executive QMS complaint summary."
+        ]
+    else:
+        reply = result
+        updated_fields = None
+        suggestions = [
+            "What is the patient health risk under ICH Q9?",
+            "Recommend immediate quarantine actions.",
+            "Check 21 CFR Part 211 regulatory references.",
+            "Draft an executive QMS complaint summary."
+        ]
     
     return ChatResponse(
         reply=reply,
-        suggested_actions=suggestions
+        suggested_actions=suggestions,
+        updated_fields=updated_fields
     )

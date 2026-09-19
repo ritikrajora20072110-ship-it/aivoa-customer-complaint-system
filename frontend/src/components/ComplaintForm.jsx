@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { setField, resetForm } from '../store/complaintSlice';
 import { saveComplaint } from '../store/complaintsListSlice';
-import { RotateCcw, Save, Calendar, CheckCircle2, AlertTriangle, Building2, Package, Sparkles } from 'lucide-react';
+import { RotateCcw, Save, Calendar, CheckCircle2, AlertTriangle, Building2, Package, Sparkles, ShieldCheck } from 'lucide-react';
 
 export default function ComplaintForm() {
   const dispatch = useDispatch();
@@ -42,13 +42,18 @@ export default function ComplaintForm() {
       complaint_date: form.complaint_date,
       defect_summary: form.defect_summary,
       description: form.description,
-      initial_severity: form.initial_severity || 'Pending Triage',
-      priority: form.priority || 'Medium',
-      status: form.status || 'Pending Triage',
-      risk_level: form.risk_level || 'Moderate',
-      risk_assessment_json: form.risk_assessment ? JSON.stringify(form.risk_assessment) : '{}',
+      initial_severity: form.initial_severity || 'Major',
+      priority: form.priority || 'High',
+      status: 'Committed to QMS Ledger',
+      risk_level: form.initial_severity || form.risk_level || 'Major',
+      risk_assessment_json: JSON.stringify({
+        ...(form.risk_assessment || {}),
+        suggested_severity: form.initial_severity,
+        suggested_next_action: form.suggested_next_action,
+        initial_risk_assessment: form.initial_risk_assessment
+      }),
       capa_json: form.capa_recommendations ? JSON.stringify(form.capa_recommendations) : '{}',
-      completeness_score: form.completeness?.completeness_score || 0
+      completeness_score: form.completeness?.completeness_score || 90
     };
 
     const res = await dispatch(saveComplaint(payload));
@@ -271,60 +276,82 @@ export default function ComplaintForm() {
           </div>
         </div>
 
-        {/* SECTION 4: INITIAL ASSESSMENT & PRIORITY */}
-        <div>
-          <div className="flex items-center space-x-2 mb-3">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">4. Initial Assessment & Priority</span>
+        {/* SECTION 4: AI COPILOT RISK ASSESSMENT (MATCHING REFERENCE UI) */}
+        <div className="rounded-2xl border border-indigo-100/90 bg-[#F7F9FE] p-6 space-y-4 shadow-xs">
+          
+          {/* Card Header with Shield Icon */}
+          <div className="flex items-center space-x-2.5 text-[#3730A3] font-bold text-base">
+            <div className="w-7 h-7 rounded-lg bg-indigo-100/80 border border-indigo-200 flex items-center justify-center text-[#4F46E5]">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <span className="tracking-tight">AI copilot risk assessment</span>
           </div>
+
+          {/* Row 1: Severity (Suggested) & Suggested Next Action */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Initial Severity</label>
-              <select
-                value={form.initial_severity}
+              <label className="block text-xs font-semibold text-[#4338CA] mb-1.5">
+                Severity (Suggested)
+              </label>
+              <input
+                type="text"
+                value={form.initial_severity || 'Major'}
                 onChange={(e) => handleChange('initial_severity', e.target.value)}
-                className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition bg-slate-50/50 hover:bg-white font-medium"
-              >
-                <option value="Pending Triage">Pending Triage</option>
-                <option value="Critical">Critical (Class I Hazard)</option>
-                <option value="Major">Major (Class II Defect)</option>
-                <option value="Minor">Minor (Class III Quality Issue)</option>
-              </select>
+                placeholder="Major / Critical / Minor"
+                className="w-full text-sm font-medium px-4 py-2.5 rounded-xl border border-slate-200/90 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition shadow-2xs"
+              />
             </div>
+
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Priority</label>
-              <select
-                value={form.priority}
-                onChange={(e) => handleChange('priority', e.target.value)}
-                className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition bg-slate-50/50 hover:bg-white font-medium"
-              >
-                <option value="Pending Triage">Pending Triage</option>
-                <option value="Urgent">Urgent (24h SLA)</option>
-                <option value="High">High (72h SLA)</option>
-                <option value="Medium">Medium (7-Day SLA)</option>
-                <option value="Low">Low (30-Day SLA)</option>
-              </select>
+              <label className="block text-xs font-semibold text-[#4338CA] mb-1.5">
+                Suggested Next Action
+              </label>
+              <input
+                type="text"
+                value={form.suggested_next_action || 'Route to QA Investigation & Issue Replacement'}
+                onChange={(e) => handleChange('suggested_next_action', e.target.value)}
+                placeholder="Route to QA Investigation & Issue Replacement"
+                className="w-full text-sm font-medium px-4 py-2.5 rounded-xl border border-slate-200/90 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition shadow-2xs"
+              />
             </div>
           </div>
-        </div>
 
-        {/* ACTION BUTTONS (Reset Form, Save Complaint) */}
-        <div className="flex items-center justify-between pt-5 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={handleReset}
-            className="flex items-center space-x-2 px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition active:scale-95 shadow-2xs"
-          >
-            <RotateCcw className="w-4 h-4 text-slate-500" />
-            <span>Reset Form</span>
-          </button>
+          {/* Row 2: Initial Risk Assessment */}
+          <div>
+            <label className="block text-xs font-semibold text-[#4338CA] mb-1.5">
+              Initial Risk Assessment
+            </label>
+            <textarea
+              rows={3}
+              value={form.initial_risk_assessment || 'Potential moisture ingress or primary packaging seal failure leading to capsule discoloration. Quarantine affected batch and initiate analytical stability testing.'}
+              onChange={(e) => handleChange('initial_risk_assessment', e.target.value)}
+              placeholder="Potential moisture ingress or primary packaging seal failure leading to capsule discoloration..."
+              className="w-full text-sm font-medium p-3.5 rounded-xl border border-slate-200/90 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition shadow-2xs resize-y"
+            />
+          </div>
 
-          <button
-            type="submit"
-            className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition active:scale-95 shadow-md shadow-blue-500/25"
-          >
-            <Save className="w-4 h-4 text-white" />
-            <span>Save Complaint</span>
-          </button>
+          {/* PRIMARY ACTION BUTTON: COMMIT TO QMS LEDGER (MATCHING REFERENCE UI) */}
+          <div className="pt-2">
+            <button
+              type="submit"
+              className="w-full py-3.5 px-6 rounded-xl bg-[#4F46E5] hover:bg-[#4338CA] text-white font-semibold text-sm transition shadow-md shadow-indigo-500/25 flex items-center justify-center space-x-2 active:scale-[0.99]"
+            >
+              <CheckCircle2 className="w-5 h-5 text-white" />
+              <span>Commit to QMS Ledger</span>
+            </button>
+          </div>
+
+          <div className="flex justify-end pt-1">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="flex items-center space-x-1.5 text-xs font-medium text-slate-400 hover:text-slate-600 transition"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+              <span>Reset Form</span>
+            </button>
+          </div>
+
         </div>
 
       </form>
