@@ -9,7 +9,7 @@ import {
   setChatLoading
 } from '../store/copilotSlice';
 import { populateFromAi, setFieldWithHighlight, setField } from '../store/complaintSlice';
-import { renameColumn } from '../store/complaintsListSlice';
+import { renameColumn, saveComplaint, setActiveView } from '../store/complaintsListSlice';
 import {
   UploadCloud,
   FileText,
@@ -23,7 +23,9 @@ import {
   Loader2,
   AlertCircle,
   Download,
-  X
+  X,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { safeFetchJson, API_BASE_URL } from '../utils/api';
 import { parseIntent } from '../utils/fieldParser';
@@ -45,6 +47,7 @@ export default function AICopilot() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteContent, setPasteContent] = useState('');
+  const [isIntakeExpanded, setIsIntakeExpanded] = useState(true);
   const fileInputRef = useRef(null);
   const abortControllerRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -252,6 +255,69 @@ export default function AICopilot() {
     }));
   };
 
+  const executeSaveComplaint = async () => {
+    dispatch(setChatLoading({ loading: true, statusText: 'Committing complaint to QMS Ledger...' }));
+    try {
+      const payload = {
+        complaint_source: form.complaint_source,
+        customer_name: form.customer_name,
+        qms_ledger: form.qms_ledger || 'LEDGER-2026-QA',
+        product_name: form.product_name,
+        product_strength_grade: form.product_strength_grade,
+        batch_number: form.batch_number,
+        mfg_date: form.mfg_date,
+        expiry_date: form.expiry_date,
+        quantity_affected: form.quantity_affected,
+        site_block: form.site_block,
+        impacted_npm: form.impacted_npm,
+        complaint_type: form.complaint_type,
+        complaint_date: form.complaint_date,
+        defect_summary: form.defect_summary,
+        description: form.description,
+        initial_severity: form.initial_severity || 'Major',
+        priority: form.priority || 'High',
+        status: 'Committed to QMS Ledger',
+        risk_level: form.initial_severity || form.risk_level || 'Major',
+        risk_assessment_json: JSON.stringify({
+          ...(form.risk_assessment || {}),
+          suggested_severity: form.initial_severity,
+          suggested_next_action: form.suggested_next_action,
+          initial_risk_assessment: form.initial_risk_assessment
+        }),
+        capa_json: form.capa_recommendations ? JSON.stringify(form.capa_recommendations) : '{}',
+        completeness_score: form.completeness?.completeness_score || 90
+      };
+
+      const res = await dispatch(saveComplaint(payload));
+      if (!res.error) {
+        dispatch(setField({ field: 'status', value: 'Committed to QMS Ledger' }));
+        const recordId = res.payload?.id || 'CC-' + Date.now().toString().slice(-6);
+        dispatch(addMessage({
+          sender: 'bot',
+          text: `🎉 **Complaint Successfully Committed to QMS Ledger!**\n\n• **QMS Record ID**: \`${recordId}\`\n• **Customer**: ${form.customer_name || 'N/A'}\n• **Product**: ${form.product_name || 'N/A'} (Batch: ${form.batch_number || 'N/A'})\n• **QMS Ledger**: \`${form.qms_ledger || 'LEDGER-2026-QA'}\`\n• **Status**: Committed & Under QA Review\n\nThe record is now permanently registered in the SQLite QMS database and available on the **Complaints Dashboard**.`,
+          suggestions: [
+            'View in Complaints Dashboard',
+            'What is the patient safety impact?',
+            'Show recommended CAPA actions'
+          ]
+        }));
+      } else {
+        dispatch(addMessage({
+          sender: 'bot',
+          text: `❌ **Failed to Commit Complaint**: ${res.error?.message || 'Error communicating with QMS database.'}`
+        }));
+      }
+    } catch (err) {
+      dispatch(addMessage({
+        sender: 'bot',
+        text: `❌ **Error**: ${err.message || 'An unexpected error occurred while saving.'}`
+      }));
+    } finally {
+      dispatch(setChatLoading(false));
+      setTimeout(scrollToBottom, 50);
+    }
+  };
+
   const handleSendMessage = async (e) => {
     e?.preventDefault();
     const query = chatInput.trim();
@@ -259,6 +325,14 @@ export default function AICopilot() {
 
     setChatInput('');
     dispatch(addMessage({ sender: 'user', text: query }));
+
+    // Check if user is asking to save / commit the complaint
+    const isSaveCommand = /^(?:please\s+)?(save\s+complaint|save\s+this\s+complaint|save|commit\s+to\s+qms\s+ledger|commit\s+complaint|save\s+to\s+ledger|commit\s+to\s+ledger|submit\s+complaint|save\s+record|commit\s+record)$/i.test(query.trim());
+    if (isSaveCommand) {
+      await executeSaveComplaint();
+      return;
+    }
+
     dispatch(setChatLoading({ loading: true, statusText: 'Processing instruction...' }));
     setTimeout(scrollToBottom, 50);
 
@@ -375,6 +449,14 @@ export default function AICopilot() {
   };
 
   const handleSuggestionClick = (suggestion) => {
+    if (suggestion === 'Commit to QMS Ledger' || suggestion === 'Save Complaint' || suggestion === 'Save this complaint') {
+      executeSaveComplaint();
+      return;
+    }
+    if (suggestion === 'View in Complaints Dashboard') {
+      dispatch(setActiveView('dashboard'));
+      return;
+    }
     if (suggestion.startsWith('Load ')) {
       if (suggestion.includes('Amoxicillin')) {
         handleTextExtract(`ATTN: Quality Assurance Department
@@ -421,216 +503,240 @@ Defect: Hairline fractures along vial neck beneath aluminum flip-off crimp seal 
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full min-h-[750px] transition-all">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full min-h-0 overflow-hidden transition-all">
       
       {/* Header matching Reference UI & Demo Video */}
-      <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+      <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
+          <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shrink-0">
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <h2 className="text-base font-bold text-slate-900">AI Complaint Intake Assistant</h2>
+              <h2 className="text-sm font-bold text-slate-900">AI Complaint Intake Assistant</h2>
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-200">
                 BETA
               </span>
             </div>
-            <p className="text-xs text-slate-500">Drop complaint files or paste text below</p>
+            <p className="text-[11px] text-slate-500">Drop complaint files or paste text below</p>
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setIsIntakeExpanded(!isIntakeExpanded)}
+          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-600 transition cursor-pointer"
+          title={isIntakeExpanded ? 'Minimize Intake Section' : 'Expand Intake Section'}
+        >
+          <span className="text-[11px]">{isIntakeExpanded ? 'Hide Intake' : 'Show Intake'}</span>
+          {isIntakeExpanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-500" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-500" />}
+        </button>
       </div>
 
       {/* INTAKE ACTIONS: Drag & Drop + Paste Button */}
-      <div className="p-5 border-b border-slate-100 space-y-3 bg-slate-50/40">
-        
-        {/* Hidden File Input */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={(e) => handleFileUpload(e.target.files?.[0])}
-          accept=".pdf,.docx,.txt,.eml"
-          className="hidden"
-        />
+      {isIntakeExpanded ? (
+        <div className="p-4 border-b border-slate-100 space-y-3 bg-slate-50/40 max-h-[300px] overflow-y-auto custom-scrollbar shrink-0">
+          
+          {/* Hidden File Input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={(e) => handleFileUpload(e.target.files?.[0])}
+            accept=".pdf,.docx,.txt,.eml"
+            className="hidden"
+          />
 
-        {/* Drag & Drop Box */}
-        <div
-          onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-          onDragLeave={() => setIsDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setIsDragOver(false);
-            if (e.dataTransfer.files?.[0]) {
-              handleFileUpload(e.dataTransfer.files[0]);
-            }
-          }}
-          onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition flex flex-col items-center justify-center ${
-            isDragOver
-              ? 'border-blue-500 bg-blue-50/50'
-              : 'border-slate-300 hover:border-blue-400 bg-white'
-          }`}
-        >
-          <UploadCloud className="w-8 h-8 text-blue-500 mb-2" />
-          <p className="text-xs font-semibold text-slate-700">
-            Drag & drop complaint document here
-          </p>
-          <p className="text-[11px] text-blue-600 font-medium hover:underline mt-0.5">
-            or click to browse
-          </p>
-        </div>
-
-        {/* OR Divider */}
-        <div className="relative flex items-center justify-center">
-          <div className="border-t border-slate-200 w-full"></div>
-          <span className="bg-slate-50 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest absolute">
-            OR
-          </span>
-        </div>
-
-        {/* Paste Complaint Text / Email Button */}
-        <button
-          type="button"
-          onClick={() => setShowPasteModal(true)}
-          className="w-full py-2 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 flex items-center justify-center space-x-2 transition shadow-2xs"
-        >
-          <FileText className="w-3.5 h-3.5 text-slate-500" />
-          <span>Paste Complaint Text / Email</span>
-        </button>
-
-        {/* Supported Formats Callout Banner */}
-        <div className="flex items-center space-x-2 p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/70 text-emerald-800 text-[11px]">
-          <Info className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-          <span>Supported formats: PDF, DOCX, TXT, EML • Max file size: 10MB</span>
-        </div>
-
-        {/* Sample Files Download & Instant Test Box */}
-        <div className="bg-slate-50/90 rounded-xl p-3 border border-slate-200 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-              <span>Sample Test Documents</span>
-            </span>
-            <span className="text-[10px] text-blue-600 font-medium">Download or 1-Click Test</span>
-          </div>
-
-          <div className="space-y-1.5">
-            {/* Sample 1: Ciprofloxacin PDF */}
-            <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs shadow-2xs hover:border-blue-200 transition">
-              <div className="flex items-center space-x-1.5 min-w-0 pr-2">
-                <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                <span className="truncate text-[11px] font-medium text-slate-800" title="Ciprofloxacin Sterile Defect (PDF)">
-                  Cipro_Sterile_Leak.pdf
-                </span>
-                <span className="bg-rose-100 text-rose-700 text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0">Critical</span>
-              </div>
-              <div className="flex items-center space-x-1.5 shrink-0">
-                <a
-                  href="/samples/ciprofloxacin_sterile_vial_leak.pdf"
-                  download="ciprofloxacin_sterile_vial_leak.pdf"
-                  className="p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition"
-                  title="Download PDF to your computer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                </a>
-                <button
-                  type="button"
-                  onClick={() => handleLoadSamplePdf('ciprofloxacin_sterile_vial_leak.pdf')}
-                  disabled={isExtracting}
-                  className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-[10px] font-semibold transition cursor-pointer"
-                >
-                  ⚡ Test
-                </button>
-              </div>
-            </div>
-
-            {/* Sample 2: Amoxicillin PDF */}
-            <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs shadow-2xs hover:border-amber-200 transition">
-              <div className="flex items-center space-x-1.5 min-w-0 pr-2">
-                <FileText className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                <span className="truncate text-[11px] font-medium text-slate-800" title="Amoxicillin Capsule Discoloration (PDF)">
-                  Amox_Discoloration.pdf
-                </span>
-                <span className="bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0">Major</span>
-              </div>
-              <div className="flex items-center space-x-1.5 shrink-0">
-                <a
-                  href="/samples/amoxicillin_capsule_discoloration.pdf"
-                  download="amoxicillin_capsule_discoloration.pdf"
-                  className="p-1 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded transition"
-                  title="Download PDF to your computer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                </a>
-                <button
-                  type="button"
-                  onClick={() => handleLoadSamplePdf('amoxicillin_capsule_discoloration.pdf')}
-                  disabled={isExtracting}
-                  className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded text-[10px] font-semibold transition cursor-pointer"
-                >
-                  ⚡ Test
-                </button>
-              </div>
-            </div>
-
-            {/* Sample 3: Email format */}
-            <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs shadow-2xs hover:border-indigo-200 transition">
-              <div className="flex items-center space-x-1.5 min-w-0 pr-2">
-                <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                <span className="truncate text-[11px] font-medium text-slate-800" title="Hospital Pharmacy Complaint (EML)">
-                  Hospital_Complaint.eml
-                </span>
-                <span className="bg-indigo-100 text-indigo-700 text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0">EML</span>
-              </div>
-              <div className="flex items-center space-x-1.5 shrink-0">
-                <a
-                  href="/samples/amoxicillin_capsule_discoloration.eml"
-                  download="amoxicillin_capsule_discoloration.eml"
-                  className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition"
-                  title="Download EML to your computer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                </a>
-                <button
-                  type="button"
-                  onClick={() => handleLoadSamplePdf('amoxicillin_capsule_discoloration.eml')}
-                  disabled={isExtracting}
-                  className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded text-[10px] font-semibold transition cursor-pointer"
-                >
-                  ⚡ Test
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* EXTRACTION PROGRESS SECTION */}
-        {(isExtracting || extractionProgress > 0) && (
-          <div className="pt-2 border-t border-slate-200/60">
-            <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-              <span>Extraction Progress</span>
-              <span className="text-blue-600">{extractionProgress}%</span>
-            </div>
-            
-            {/* Progress Bar */}
-            <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 transition-all duration-300 rounded-full"
-                style={{ width: `${extractionProgress}%` }}
-              ></div>
-            </div>
-
-            <p className="text-xs text-slate-600 mt-2 font-medium flex items-center space-x-1.5">
-              {isExtracting && <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin flex-shrink-0" />}
-              <span>{currentStatusText}</span>
+          {/* Drag & Drop Box */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragOver(false);
+              if (e.dataTransfer.files?.[0]) {
+                handleFileUpload(e.dataTransfer.files[0]);
+              }
+            }}
+            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition flex flex-col items-center justify-center ${
+              isDragOver
+                ? 'border-blue-500 bg-blue-50/50'
+                : 'border-slate-300 hover:border-blue-400 bg-white'
+            }`}
+          >
+            <UploadCloud className="w-7 h-7 text-blue-500 mb-1.5" />
+            <p className="text-xs font-semibold text-slate-700">
+              Drag & drop complaint document here
+            </p>
+            <p className="text-[11px] text-blue-600 font-medium hover:underline mt-0.5">
+              or click to browse
             </p>
           </div>
-        )}
 
-      </div>
+          {/* OR Divider */}
+          <div className="relative flex items-center justify-center">
+            <div className="border-t border-slate-200 w-full"></div>
+            <span className="bg-slate-50 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest absolute">
+              OR
+            </span>
+          </div>
 
-      {/* AI ASSISTANT CHAT FEED */}
-      <div className="flex-1 p-5 overflow-y-auto space-y-4">
+          {/* Paste Complaint Text / Email Button */}
+          <button
+            type="button"
+            onClick={() => setShowPasteModal(true)}
+            className="w-full py-2 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 flex items-center justify-center space-x-2 transition shadow-2xs"
+          >
+            <FileText className="w-3.5 h-3.5 text-slate-500" />
+            <span>Paste Complaint Text / Email</span>
+          </button>
+
+          {/* Supported Formats Callout Banner */}
+          <div className="flex items-center space-x-2 p-2 rounded-xl bg-emerald-50/70 border border-emerald-200/70 text-emerald-800 text-[11px]">
+            <Info className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+            <span>Supported formats: PDF, DOCX, TXT, EML • Max file size: 10MB</span>
+          </div>
+
+          {/* Sample Files Download & Instant Test Box */}
+          <div className="bg-slate-50/90 rounded-xl p-2.5 border border-slate-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                <span>Sample Test Documents</span>
+              </span>
+              <span className="text-[10px] text-blue-600 font-medium">Download or 1-Click Test</span>
+            </div>
+
+            <div className="space-y-1.5">
+              {/* Sample 1: Ciprofloxacin PDF */}
+              <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs shadow-2xs hover:border-blue-200 transition">
+                <div className="flex items-center space-x-1.5 min-w-0 pr-2">
+                  <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                  <span className="truncate text-[11px] font-medium text-slate-800" title="Ciprofloxacin Sterile Defect (PDF)">
+                    Cipro_Sterile_Leak.pdf
+                  </span>
+                  <span className="bg-rose-100 text-rose-700 text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0">Critical</span>
+                </div>
+                <div className="flex items-center space-x-1.5 shrink-0">
+                  <a
+                    href="/samples/ciprofloxacin_sterile_vial_leak.pdf"
+                    download="ciprofloxacin_sterile_vial_leak.pdf"
+                    className="p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition"
+                    title="Download PDF to your computer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => handleLoadSamplePdf('ciprofloxacin_sterile_vial_leak.pdf')}
+                    disabled={isExtracting}
+                    className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-[10px] font-semibold transition cursor-pointer"
+                  >
+                    ⚡ Test
+                  </button>
+                </div>
+              </div>
+
+              {/* Sample 2: Amoxicillin PDF */}
+              <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs shadow-2xs hover:border-amber-200 transition">
+                <div className="flex items-center space-x-1.5 min-w-0 pr-2">
+                  <FileText className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span className="truncate text-[11px] font-medium text-slate-800" title="Amoxicillin Capsule Discoloration (PDF)">
+                    Amox_Discoloration.pdf
+                  </span>
+                  <span className="bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0">Major</span>
+                </div>
+                <div className="flex items-center space-x-1.5 shrink-0">
+                  <a
+                    href="/samples/amoxicillin_capsule_discoloration.pdf"
+                    download="amoxicillin_capsule_discoloration.pdf"
+                    className="p-1 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded transition"
+                    title="Download PDF to your computer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => handleLoadSamplePdf('amoxicillin_capsule_discoloration.pdf')}
+                    disabled={isExtracting}
+                    className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded text-[10px] font-semibold transition cursor-pointer"
+                  >
+                    ⚡ Test
+                  </button>
+                </div>
+              </div>
+
+              {/* Sample 3: Email format */}
+              <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs shadow-2xs hover:border-indigo-200 transition">
+                <div className="flex items-center space-x-1.5 min-w-0 pr-2">
+                  <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                  <span className="truncate text-[11px] font-medium text-slate-800" title="Hospital Pharmacy Complaint (EML)">
+                    Hospital_Complaint.eml
+                  </span>
+                  <span className="bg-indigo-100 text-indigo-700 text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0">EML</span>
+                </div>
+                <div className="flex items-center space-x-1.5 shrink-0">
+                  <a
+                    href="/samples/amoxicillin_capsule_discoloration.eml"
+                    download="amoxicillin_capsule_discoloration.eml"
+                    className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition"
+                    title="Download EML to your computer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => handleLoadSamplePdf('amoxicillin_capsule_discoloration.eml')}
+                    disabled={isExtracting}
+                    className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded text-[10px] font-semibold transition cursor-pointer"
+                  >
+                    ⚡ Test
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* EXTRACTION PROGRESS SECTION */}
+          {(isExtracting || extractionProgress > 0) && (
+            <div className="pt-2 border-t border-slate-200/60">
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                <span>Extraction Progress</span>
+                <span className="text-blue-600">{extractionProgress}%</span>
+              </div>
+              
+              {/* Progress Bar */}
+              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 transition-all duration-300 rounded-full"
+                  style={{ width: `${extractionProgress}%` }}
+                ></div>
+              </div>
+
+              <p className="text-xs text-slate-600 mt-2 font-medium flex items-center space-x-1.5">
+                {isExtracting && <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin flex-shrink-0" />}
+                <span>{currentStatusText}</span>
+              </p>
+            </div>
+          )}
+
+        </div>
+      ) : (
+        <div className="px-4 py-2.5 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between text-xs text-slate-600 shrink-0">
+          <span className="text-[11px] text-slate-500">Document intake minimized.</span>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="text-[11px] text-indigo-600 font-semibold hover:underline cursor-pointer flex items-center space-x-1"
+          >
+            <UploadCloud className="w-3.5 h-3.5 mr-1" />
+            <span>Upload Document</span>
+          </button>
+        </div>
+      )}
+
+      {/* AI ASSISTANT CHAT FEED (INDEPENDENT SCROLL) */}
+      <div className="flex-1 p-4 overflow-y-auto space-y-3.5 min-h-0 custom-scrollbar bg-white">
         <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
           AI Assistant
         </div>
@@ -714,7 +820,7 @@ Defect: Hairline fractures along vial neck beneath aluminum flip-off crimp seal 
       </div>
 
       {/* CHAT INPUT AREA */}
-      <div className="p-4 border-t border-slate-100 bg-white">
+      <div className="p-3.5 border-t border-slate-100 bg-white shrink-0">
         <form onSubmit={handleSendMessage} className="relative flex items-center">
           <button
             type="button"

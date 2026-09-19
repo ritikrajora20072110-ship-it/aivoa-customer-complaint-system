@@ -17,39 +17,39 @@ export default function App() {
   }, [dispatch]);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col">
+    <div className="h-screen bg-[#F8FAFC] flex flex-col overflow-hidden">
       <Navbar />
 
-      <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 max-w-[1680px] w-full mx-auto px-3 sm:px-5 lg:px-6 py-3 overflow-hidden flex flex-col min-h-0">
         {activeView === 'form' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-full min-h-0 items-stretch">
             
-            {/* Left Column: Form + Risk Assessment + Bonus Modules */}
-            <div className="lg:col-span-7 space-y-8">
+            {/* Left Column: Complaint Box & QMS Assessment (Independent Scroll) */}
+            <div className="lg:col-span-7 h-full overflow-y-auto pr-2.5 space-y-5 custom-scrollbar pb-8">
               <ComplaintForm />
               <RiskAssessmentCard />
               <BonusToolsDrawer />
             </div>
 
-            {/* Right Column: AI Intake Assistant / Copilot */}
-            <div className="lg:col-span-5 sticky top-20">
+            {/* Right Column: AI Copilot & Intake Assistant (Independent Scroll) */}
+            <div className="lg:col-span-5 h-full min-h-0 overflow-hidden flex flex-col">
               <AICopilot />
             </div>
 
           </div>
         ) : (
-          <ComplaintsDashboard />
+          <div className="h-full overflow-y-auto pr-2 custom-scrollbar pb-8">
+            <ComplaintsDashboard />
+          </div>
         )}
       </main>
 
-      {/* Compliance Footer */}
-      <footer className="bg-white border-t border-slate-200 py-6 mt-12 text-center text-xs text-slate-500">
-        <div className="max-w-[1600px] mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>© 2026 AIVOA.ai • AI-Powered Quality Management System (QMS)</span>
-          <span className="font-medium text-slate-400">
-            Validated for FDA 21 CFR Part 211 / Part 11 & EU GMP Annex 11 • LangGraph Agent
-          </span>
-        </div>
+      {/* Compact Status Bar */}
+      <footer className="bg-white border-t border-slate-200 py-2 px-6 shrink-0 text-[11px] text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-1 shadow-2xs">
+        <span>© 2026 AIVOA.ai • AI-Powered Customer Complaint Management System</span>
+        <span className="font-medium text-slate-400">
+          FDA 21 CFR Part 211 / Part 11 • ICH Q9 Quality Risk Management • Dual Split-Scroll Enabled
+        </span>
       </footer>
     </div>
   );

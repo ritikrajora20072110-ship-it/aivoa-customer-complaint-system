@@ -136,7 +136,15 @@ export default function ComplaintForm() {
           </div>
           <p className="text-sm font-medium text-slate-500 mt-0.5">API & FDF Quality Assurance Module • QMS Record Management</p>
         </div>
-        <div>
+        <div className="flex items-center space-x-2.5">
+          <button
+            type="button"
+            onClick={handleSave}
+            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>Save Complaint</span>
+          </button>
           <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 shadow-xs">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-2 animate-pulse"></span>
             {form.status || 'Pending Triage'}
