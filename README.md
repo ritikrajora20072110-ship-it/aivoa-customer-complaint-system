@@ -1,8 +1,4 @@
 # AIVOA — AI-Powered Customer Complaint Management System
-### Round 1 AI Product Engineer (Interns) Submission
-**Company**: AIVOA ([https://aivoa.ai](https://aivoa.ai))  
-**Domain**: Quality Management System (QMS) for Pharmaceutical API & Finished Dosage Form (FDF) Manufacturing.
-
 ---
 
 ## 1. Executive Summary & Objective
@@ -135,9 +131,3 @@ The `samples/` directory includes realistic pharmaceutical defect documents:
 4. `samples/ciprofloxacin_sterile_vial_leak.pdf`: Official hospital PDF defect advisory regarding hairline vial cracks and sterility breach.
 
 ---
-
-## 6. Video Walkthrough Guide
-
-Refer to [`docs/DEMO_VIDEO_WALKTHROUGH_SCRIPT.md`](docs/DEMO_VIDEO_WALKTHROUGH_SCRIPT.md) for a comprehensive, second-by-second script covering:
-- **Video 1 (Feature Demo)**: Live demonstration of file upload, progress feedback, form auto-fill, risk assessment, and bonus AI tools.
-- **Video 2 (Code Walkthrough)**: End-to-end code architecture from frontend Redux actions to FastAPI routers, LangGraph state transitions, and database persistence.
