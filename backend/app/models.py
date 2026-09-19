@@ -10,6 +10,7 @@ class Complaint(Base):
     # 1. ORIGIN & CUSTOMER DETAILS
     complaint_source = Column(String(255), default="")
     customer_name = Column(String(255), default="")
+    qms_ledger = Column(String(255), default="LEDGER-2026-QA")
     
     # 2. PRODUCT & BATCH IDENTIFICATION
     product_name = Column(String(255), default="")

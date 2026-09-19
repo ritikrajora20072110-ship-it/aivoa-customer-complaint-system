@@ -20,6 +20,7 @@ const initialState = {
   currentStatusText: 'Awaiting complaint input...',
   workflowSteps: [],
   isChatLoading: false,
+  chatStatusText: 'Processing Copilot request...',
   error: null
 };
 
@@ -61,7 +62,13 @@ export const copilotSlice = createSlice({
       state.currentStatusText = 'Extraction failed. Check document format.';
     },
     setChatLoading: (state, action) => {
-      state.isChatLoading = action.payload;
+      if (typeof action.payload === 'object' && action.payload !== null) {
+        state.isChatLoading = !!action.payload.loading;
+        if (action.payload.statusText) state.chatStatusText = action.payload.statusText;
+      } else {
+        state.isChatLoading = !!action.payload;
+        if (!action.payload) state.chatStatusText = 'Ready';
+      }
     },
     resetCopilot: (state) => {
       return {

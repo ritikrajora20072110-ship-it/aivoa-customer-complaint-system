@@ -81,4 +81,43 @@ def test_sample_pdf_upload_extraction():
     assert "Ciprofloxacin" in ext.get("product_name", "") or "CIP" in ext.get("batch_number", "")
     assert ext.get("initial_severity") == "Critical" or risk.get("suggested_severity") == "Critical"
 
+def test_column_rename_instruction():
+    res = client.post("/api/agent/chat", json={
+        "message": "Change column name Customer ID to QMS Ledger",
+        "complaint_context": {},
+        "chat_history": []
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert data["column_updates"] is not None
+    assert data["column_updates"]["new_name"] == "QMS Ledger"
+    assert data["column_updates"]["action"] == "rename"
+    assert "QMS Ledger" in data["reply"]
+
+def test_qms_ledger_field_update():
+    res = client.post("/api/agent/chat", json={
+        "message": "update QMS Ledger to LEDGER-PHARMA-77",
+        "complaint_context": {"qms_ledger": "LEDGER-2026-QA"},
+        "chat_history": []
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert data["updated_fields"] is not None
+    assert data["updated_fields"].get("qms_ledger") == "LEDGER-PHARMA-77"
+    assert data["field_diff"]["previous_value"] == "LEDGER-2026-QA"
+    assert data["field_diff"]["new_value"] == "LEDGER-PHARMA-77"
+
+def test_delete_action_keyword():
+    res = client.post("/api/agent/chat", json={
+        "message": "delete customer name",
+        "complaint_context": {"customer_name": "Rithvik Kumar"},
+        "chat_history": []
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert data["updated_fields"] is not None
+    assert data["updated_fields"].get("customer_name") == ""
+    assert data["field_diff"]["action"] == "delete"
+
+
 

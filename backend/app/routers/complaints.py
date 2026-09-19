@@ -33,6 +33,7 @@ def create_complaint(complaint_in: ComplaintCreate, db: Session = Depends(get_db
     db_complaint = Complaint(
         complaint_source=complaint_in.complaint_source,
         customer_name=complaint_in.customer_name,
+        qms_ledger=complaint_in.qms_ledger or "LEDGER-2026-QA",
         product_name=complaint_in.product_name,
         product_strength_grade=complaint_in.product_strength_grade,
         batch_number=complaint_in.batch_number,
@@ -89,6 +90,8 @@ def update_complaint(complaint_id: int, update_data: ComplaintUpdate, db: Sessio
         c.initial_severity = update_data.initial_severity
     if update_data.priority is not None:
         c.priority = update_data.priority
+    if update_data.qms_ledger is not None:
+        c.qms_ledger = update_data.qms_ledger
         
     db.commit()
     db.refresh(c)

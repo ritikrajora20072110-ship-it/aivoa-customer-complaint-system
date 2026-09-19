@@ -46,109 +46,277 @@ def run_llm_json_generation(prompt: str, system_prompt: str, model_name: Optiona
         print(f"Groq LLM invocation or parsing error: {e}")
         return None
 
-def detect_field_updates_from_message(message: str):
+FIELD_MAP = {
+    "qms ledger": ("qms_ledger", "QMS Ledger"),
+    "qms ledger id": ("qms_ledger", "QMS Ledger"),
+    "qms_ledger": ("qms_ledger", "QMS Ledger"),
+    "ledger": ("qms_ledger", "QMS Ledger"),
+    "customer name": ("customer_name", "Customer Name"),
+    "customer": ("customer_name", "Customer Name"),
+    "customer id": ("customer_name", "Customer Name"),
+    "username": ("customer_name", "Customer Name"),
+    "username customer name": ("customer_name", "Customer Name"),
+    "client": ("customer_name", "Customer Name"),
+    "client name": ("customer_name", "Customer Name"),
+    "product name": ("product_name", "Product Name"),
+    "product": ("product_name", "Product Name"),
+    "drug": ("product_name", "Product Name"),
+    "drug product": ("product_name", "Product Name"),
+    "product strength": ("product_strength_grade", "Product Strength / Grade"),
+    "product strength grade": ("product_strength_grade", "Product Strength / Grade"),
+    "strength": ("product_strength_grade", "Product Strength / Grade"),
+    "grade": ("product_strength_grade", "Product Strength / Grade"),
+    "batch number": ("batch_number", "Batch / Lot Number"),
+    "batch no": ("batch_number", "Batch / Lot Number"),
+    "batch #": ("batch_number", "Batch / Lot Number"),
+    "batch": ("batch_number", "Batch / Lot Number"),
+    "lot number": ("batch_number", "Batch / Lot Number"),
+    "lot no": ("batch_number", "Batch / Lot Number"),
+    "lot": ("batch_number", "Batch / Lot Number"),
+    "mfg date": ("mfg_date", "Manufacturing Date"),
+    "manufacturing date": ("mfg_date", "Manufacturing Date"),
+    "expiry date": ("expiry_date", "Expiry Date"),
+    "expiration date": ("expiry_date", "Expiry Date"),
+    "expiry": ("expiry_date", "Expiry Date"),
+    "quantity affected": ("quantity_affected", "Quantity Affected"),
+    "quantity": ("quantity_affected", "Quantity Affected"),
+    "qty": ("quantity_affected", "Quantity Affected"),
+    "site block": ("site_block", "Originating Site Block"),
+    "site": ("site_block", "Originating Site Block"),
+    "facility": ("site_block", "Originating Site Block"),
+    "cleanroom block": ("site_block", "Originating Site Block"),
+    "cleanroom": ("site_block", "Originating Site Block"),
+    "impacted npm": ("impacted_npm", "Impacted Packaging Material"),
+    "packaging material": ("impacted_npm", "Impacted Packaging Material"),
+    "packaging": ("impacted_npm", "Impacted Packaging Material"),
+    "complaint type": ("complaint_type", "Complaint Type"),
+    "type": ("complaint_type", "Complaint Type"),
+    "complaint source": ("complaint_source", "Complaint Source"),
+    "source": ("complaint_source", "Complaint Source"),
+    "complaint date": ("complaint_date", "Complaint Date"),
+    "date": ("complaint_date", "Complaint Date"),
+    "defect summary": ("defect_summary", "Defect Summary"),
+    "defect": ("defect_summary", "Defect Summary"),
+    "description": ("description", "Detailed Description"),
+    "suggested severity": ("initial_severity", "Suggested Severity"),
+    "severity": ("initial_severity", "Suggested Severity"),
+    "risk level": ("initial_severity", "Suggested Severity"),
+    "initial severity": ("initial_severity", "Suggested Severity"),
+    "suggested next action": ("suggested_next_action", "Suggested Next Action"),
+    "next action": ("suggested_next_action", "Suggested Next Action"),
+    "action": ("suggested_next_action", "Suggested Next Action"),
+    "initial risk assessment": ("initial_risk_assessment", "Initial Risk Assessment"),
+    "risk assessment": ("initial_risk_assessment", "Initial Risk Assessment"),
+    "priority": ("priority", "Priority"),
+    "status": ("status", "Triage Status"),
+    "triage status": ("status", "Triage Status"),
+}
+
+COLUMN_MAP = {
+    "customer id": ("customer_name", "Customer ID"),
+    "customer": ("customer_name", "Customer"),
+    "customer name": ("customer_name", "Customer"),
+    "complaint id": ("id", "Complaint ID"),
+    "id": ("id", "Complaint ID"),
+    "product name": ("product_name", "Product Name"),
+    "product": ("product_name", "Product Name"),
+    "batch number": ("batch_number", "Batch Number"),
+    "batch": ("batch_number", "Batch Number"),
+    "defect classification": ("defect_summary", "Defect Classification"),
+    "defect": ("defect_summary", "Defect Classification"),
+    "severity": ("initial_severity", "Severity"),
+    "triage status": ("status", "Triage Status"),
+    "status": ("status", "Triage Status"),
+    "qms ledger": ("qms_ledger", "QMS Ledger"),
+    "ledger": ("qms_ledger", "QMS Ledger"),
+}
+
+def detect_field_updates_from_message(message: str, context: Optional[dict] = None):
     """
-    Detect conversational instructions to change complaint form fields in layman language.
-    Returns: (updated_fields_dict, confirmation_message) or (None, None)
+    Detect instructions to change/update/remove/delete/add form fields or table columns.
+    Preserves all names, fields, columns, and values appearing after 'to' exactly as provided.
+    Returns: (updated_fields_dict, column_updates_dict, field_diff_dict, confirmation_message)
     """
+    if not message or not isinstance(message, str):
+        return None, None, None, None
+
     raw = message.strip()
-    
-    # 1. Customer Name / Username
-    m_cust = re.search(r'(?:change|update|set|make|replace|rename)\s+(?:the\s+)?(?:username\s+customer\s+name|customer\s+name|username|customer|client(?:\s+name)?)\s*(?:to|as|=|is|with|\s)\s*([^\.\,\;\n]+)', raw, re.IGNORECASE)
-    if not m_cust:
-        m_cust = re.search(r'(?:username\s+customer\s+name|customer\s+name|customer)\s*(?:is|should\s+be|=|:)\s*([^\.\,\;\n]+)', raw, re.IGNORECASE)
-    if m_cust:
-        val = m_cust.group(1).strip().strip('"\'')
-        return ({"customer_name": val}, f"✅ **Field Updated**: Changed **Customer Name** to **{val}**.")
+    ctx = context or {}
 
-    # 2. Product Name
-    m_prod = re.search(r'(?:change|update|set|make)\s+(?:the\s+)?(?:product(?:\s+name)?|drug(?:\s+product)?)\s*(?:to|as|=|is|with|\s)\s*([^\.\,\;\n]+)', raw, re.IGNORECASE)
-    if not m_prod:
-        m_prod = re.search(r'(?:product(?:\s+name)?|drug)\s*(?:is|should\s+be|=|:)\s*([^\.\,\;\n]+)', raw, re.IGNORECASE)
-    if m_prod:
-        val = m_prod.group(1).strip().strip('"\'')
-        return ({"product_name": val}, f"✅ **Field Updated**: Changed **Product Name** to **{val}**.")
+    # 1. COLUMN INSTRUCTIONS: e.g. "Change column name Customer ID to QMS Ledger"
+    col_pattern = re.search(
+        r'^(?:please\s+)?(change|update|rename|modify|remove|delete|add)\s+(?:the\s+)?(?:column\s+name|columns?\s+name|columns?)\s+["\']?([^"\',;\n]+?)["\']?(?:\s+(?:to|as|=|with)\s+(.+))?$',
+        raw,
+        re.IGNORECASE
+    )
+    if col_pattern:
+        action = col_pattern.group(1).lower()
+        target_name = col_pattern.group(2).strip()
+        new_val = col_pattern.group(3).strip() if col_pattern.group(3) else ""
+        if new_val.startswith(('"', "'")) and new_val.endswith(('"', "'")) and len(new_val) >= 2:
+            new_val = new_val[1:-1]
 
-    # 3. Batch Number / Lot Number
-    m_batch = re.search(r'(?:change|update|set|make)\s+(?:the\s+)?(?:batch(?:\s+number|\s+no|\s+#)?|lot(?:\s+number|\s+no|\s+#)?)\s*(?:to|as|=|is|with|\s)\s*([^\.\,\;\n]+)', raw, re.IGNORECASE)
-    if not m_batch:
-        m_batch = re.search(r'(?:batch(?:\s+number|\s+no|\s+#)?|lot(?:\s+number|\s+no|\s+#)?)\s*(?:is|should\s+be|=|:)\s*([^\.\,\;\n]+)', raw, re.IGNORECASE)
-    if m_batch:
-        val = m_batch.group(1).strip().strip('"\'')
-        return ({"batch_number": val}, f"✅ **Field Updated**: Changed **Batch / Lot Number** to **{val}**.")
+        target_norm = target_name.lower()
+        col_info = COLUMN_MAP.get(target_norm)
+        if col_info:
+            col_key, original_label = col_info
+        else:
+            col_key = target_norm.replace(" ", "_")
+            original_label = target_name
 
-    # 4. Severity (Suggested) / Risk Level
-    m_sev = re.search(r'(?:change|update|set|make)\s+(?:the\s+)?(?:suggested\s+severity|severity|risk\s+level|criticality)\s*(?:to|as|=|is|with|\s)\s*(critical|major|minor|pending triage)', raw, re.IGNORECASE)
-    if not m_sev:
-        m_sev = re.search(r'(?:severity|risk\s+level)\s*(?:is|should\s+be|=|:)\s*(critical|major|minor)', raw, re.IGNORECASE)
-    if m_sev:
-        val = m_sev.group(1).strip().title()
-        return ({"initial_severity": val, "risk_level": val}, f"✅ **Field Updated**: Changed **Severity (Suggested)** to **{val}**.")
+        if action in ("remove", "delete"):
+            col_update = {
+                "action": "remove",
+                "column_key": col_key,
+                "previous_name": original_label
+            }
+            confirmation = (
+                f"✅ **Column Removed Successfully**\n"
+                f"• **Target Column**: {original_label}\n"
+                f"• **Action**: Column removed from dashboard ledger view."
+            )
+            return None, col_update, None, confirmation
+        else:
+            # action is change/update/rename/modify/add: preserve new_val EXACTLY!
+            col_update = {
+                "action": "rename",
+                "column_key": col_key,
+                "previous_name": original_label,
+                "new_name": new_val
+            }
+            confirmation = (
+                f"✅ **Column Renamed Successfully**\n"
+                f"• **Target Column**: {original_label}\n"
+                f"• **Previous Name**: {original_label}\n"
+                f"• **Updated Name**: **{new_val}**\n"
+                f"• **Status**: Dashboard column header renamed to exactly \"{new_val}\" and visibly highlighted."
+            )
+            return None, col_update, None, confirmation
 
-    # 5. Suggested Next Action
-    m_act = re.search(r'(?:change|update|set|make)\s+(?:the\s+)?(?:suggested\s+next\s+action|next\s+action|action)\s*(?:to|as|=|is|with|\s)\s*([^\.\;\n]+)', raw, re.IGNORECASE)
-    if m_act:
-        val = m_act.group(1).strip().strip('"\'')
-        return ({"suggested_next_action": val}, f"✅ **Field Updated**: Changed **Suggested Next Action** to **{val}**.")
+    # 2. EXPLICIT FIELD INSTRUCTIONS: e.g. "change field customer_name to Rithvik Kumar"
+    field_pattern = re.search(
+        r'^(?:please\s+)?(change|update|modify|set|remove|delete|add)\s+(?:the\s+)?(?:fields?)\s+["\']?([^"\',;\n]+?)["\']?(?:\s+(?:to|as|=|with|is)\s+(.+))?$',
+        raw,
+        re.IGNORECASE
+    )
+    if field_pattern:
+        action = field_pattern.group(1).lower()
+        target_name = field_pattern.group(2).strip()
+        new_val = field_pattern.group(3).strip() if field_pattern.group(3) else ""
+        if new_val.startswith(('"', "'")) and new_val.endswith(('"', "'")) and len(new_val) >= 2:
+            new_val = new_val[1:-1]
 
-    # 6. Initial Risk Assessment
-    m_risk_desc = re.search(r'(?:change|update|set|make)\s+(?:the\s+)?(?:initial\s+risk\s+assessment|risk\s+assessment(?:\s+description)?)\s*(?:to|as|=|is|with|\s)\s*([^\;\n]+)', raw, re.IGNORECASE)
-    if m_risk_desc:
-        val = m_risk_desc.group(1).strip().strip('"\'')
-        return ({"initial_risk_assessment": val}, f"✅ **Field Updated**: Changed **Initial Risk Assessment**.")
+        target_norm = target_name.lower()
+        field_info = FIELD_MAP.get(target_norm)
+        if field_info:
+            field_key, field_label = field_info
+        else:
+            field_key = target_norm.replace(" ", "_")
+            field_label = target_name
 
-    # 7. Priority
-    m_pri = re.search(r'(?:change|update|set|make)\s+(?:the\s+)?(?:priority)\s*(?:to|as|=|is|with|\s)\s*(urgent|high|medium|low)', raw, re.IGNORECASE)
-    if m_pri:
-        val = m_pri.group(1).strip().title()
-        return ({"priority": val}, f"✅ **Field Updated**: Changed **Priority** to **{val}**.")
+        prev_val = ctx.get(field_key, "")
 
-    # 8. Site Block / Facility
-    m_site = re.search(r'(?:change|update|set|make)\s+(?:the\s+)?(?:site(?:\s+block)?|facility|cleanroom(?:\s+block)?)\s*(?:to|as|=|is|with|\s)\s*([^\.\,\;\n]+)', raw, re.IGNORECASE)
-    if m_site:
-        val = m_site.group(1).strip().strip('"\'')
-        return ({"site_block": val}, f"✅ **Field Updated**: Changed **Originating Site Block** to **{val}**.")
+        if action in ("remove", "delete"):
+            field_diff = {
+                "field": field_key,
+                "label": field_label,
+                "previous_value": prev_val,
+                "new_value": "",
+                "action": "delete"
+            }
+            confirmation = (
+                f"✅ **Field Cleared Successfully**\n"
+                f"• **Target Field**: {field_label}\n"
+                f"• **Previous Value**: \"{prev_val or '(empty)'}\"\n"
+                f"• **Updated Value**: \"(cleared)\"\n"
+                f"• **Status**: Form field cleared and visibly highlighted in amber."
+            )
+            return {field_key: ""}, None, field_diff, confirmation
+        else:
+            field_diff = {
+                "field": field_key,
+                "label": field_label,
+                "previous_value": prev_val,
+                "new_value": new_val,
+                "action": "update"
+            }
+            extra = {}
+            if field_key == "initial_severity":
+                extra["risk_level"] = new_val
+            confirmation = (
+                f"✅ **Field Updated Successfully**\n"
+                f"• **Target Field**: {field_label}\n"
+                f"• **Previous Value**: \"{prev_val or '(empty)'}\"\n"
+                f"• **Updated Value**: **\"{new_val}\"**\n"
+                f"• **Status**: Form field updated to exact input and visibly highlighted in green."
+            )
+            return {field_key: new_val, **extra}, None, field_diff, confirmation
 
-    # 9. Quantity Affected
-    m_qty = re.search(r'(?:change|update|set|make)\s+(?:the\s+)?(?:quantity(?:\s+affected)?|qty)\s*(?:to|as|=|is|with|\s)\s*([^\.\,\;\n]+)', raw, re.IGNORECASE)
-    if m_qty:
-        val = m_qty.group(1).strip().strip('"\'')
-        return ({"quantity_affected": val}, f"✅ **Field Updated**: Changed **Quantity Affected** to **{val}**.")
+    # 3. NATURAL FIELD INSTRUCTIONS (Sorted longest phrase first):
+    for name_phrase, (field_key, field_label) in sorted(FIELD_MAP.items(), key=lambda x: -len(x[0])):
+        # Check remove / delete
+        del_m = re.search(r'^(?:please\s+)?(remove|delete)\s+(?:the\s+)?' + re.escape(name_phrase) + r'$', raw, re.IGNORECASE)
+        if del_m:
+            prev_val = ctx.get(field_key, "")
+            field_diff = {
+                "field": field_key,
+                "label": field_label,
+                "previous_value": prev_val,
+                "new_value": "",
+                "action": "delete"
+            }
+            confirmation = (
+                f"✅ **Field Cleared Successfully**\n"
+                f"• **Target Field**: {field_label}\n"
+                f"• **Previous Value**: \"{prev_val or '(empty)'}\"\n"
+                f"• **Updated Value**: \"(cleared)\"\n"
+                f"• **Status**: Form field cleared and visibly highlighted."
+            )
+            return {field_key: ""}, None, field_diff, confirmation
 
-    # 10. Defect Summary
-    m_def = re.search(r'(?:change|update|set|make)\s+(?:the\s+)?(?:defect(?:\s+summary)?)\s*(?:to|as|=|is|with|\s)\s*([^\.\;\n]+)', raw, re.IGNORECASE)
-    if m_def:
-        val = m_def.group(1).strip().strip('"\'')
-        return ({"defect_summary": val}, f"✅ **Field Updated**: Changed **Defect Summary** to **{val}**.")
+        # Check change / update / set / make / add
+        upd_m = re.search(
+            r'^(?:please\s+)?(change|update|set|make|replace|add)\s+(?:the\s+)?' + re.escape(name_phrase) + r'\s*(?:to|as|=|is|with|\s)\s*(.+)$',
+            raw,
+            re.IGNORECASE
+        )
+        if upd_m:
+            val = upd_m.group(2).strip()
+            if val.startswith(('"', "'")) and val.endswith(('"', "'")) and len(val) >= 2:
+                val = val[1:-1]
+            prev_val = ctx.get(field_key, "")
+            extra = {}
+            if field_key == "initial_severity":
+                extra["risk_level"] = val
 
-    # 11. Expiry Date
-    m_exp = re.search(r'(?:change|update|set|make)\s+(?:the\s+)?(?:expiry(?:\s+date)?|expiration(?:\s+date)?)\s*(?:to|as|=|is|with|\s)\s*([^\.\,\;\n]+)', raw, re.IGNORECASE)
-    if m_exp:
-        val = m_exp.group(1).strip().strip('"\'')
-        return ({"expiry_date": val}, f"✅ **Field Updated**: Changed **Expiry Date** to **{val}**.")
+            field_diff = {
+                "field": field_key,
+                "label": field_label,
+                "previous_value": prev_val,
+                "new_value": val,
+                "action": "update"
+            }
+            confirmation = (
+                f"✅ **Field Updated Successfully**\n"
+                f"• **Target Field**: {field_label}\n"
+                f"• **Previous Value**: \"{prev_val or '(empty)'}\"\n"
+                f"• **Updated Value**: **\"{val}\"**\n"
+                f"• **Status**: Form field updated to exact input and visibly highlighted in green."
+            )
+            return {field_key: val, **extra}, None, field_diff, confirmation
 
-    # 12. Manufacturing Date
-    m_mfg = re.search(r'(?:change|update|set|make)\s+(?:the\s+)?(?:mfg(?:\s+date)?|manufacturing(?:\s+date)?)\s*(?:to|as|=|is|with|\s)\s*([^\.\,\;\n]+)', raw, re.IGNORECASE)
-    if m_mfg:
-        val = m_mfg.group(1).strip().strip('"\'')
-        return ({"mfg_date": val}, f"✅ **Field Updated**: Changed **Manufacturing Date** to **{val}**.")
-
-    # 13. Packaging / Impacted NPM
-    m_npm = re.search(r'(?:change|update|set|make)\s+(?:the\s+)?(?:impacted\s+npm|packaging(?:\s+material)?)\s*(?:to|as|=|is|with|\s)\s*([^\.\,\;\n]+)', raw, re.IGNORECASE)
-    if m_npm:
-        val = m_npm.group(1).strip().strip('"\'')
-        return ({"impacted_npm": val}, f"✅ **Field Updated**: Changed **Impacted Packaging Material** to **{val}**.")
-
-    return (None, None)
+    return None, None, None, None
 
 def run_llm_chat(message: str, history: list, context: dict, model_name: Optional[str] = None) -> Dict[str, Any]:
     """Invoke Groq LLM for conversational copilot assistance and field updates."""
-    # First: Check for natural language field update commands
-    field_updates, confirmation = detect_field_updates_from_message(message)
-    if field_updates:
+    # First: Check for action keyword instructions on fields or columns
+    field_updates, column_updates, field_diff, confirmation = detect_field_updates_from_message(message, context)
+    if field_updates or column_updates:
         return {
-            "reply": f"{confirmation}\n\nThe complaint form field has been updated directly. You can review the change on the left and commit to the QMS Ledger whenever ready.",
+            "reply": confirmation,
             "updated_fields": field_updates,
+            "column_updates": column_updates,
+            "field_diff": field_diff,
             "suggested_actions": [
                 "Commit to QMS Ledger",
                 "What is the patient health risk under ICH Q9?",

@@ -80,6 +80,8 @@ def copilot_chat(request: ChatRequest):
     if isinstance(result, dict):
         reply = result.get("reply", "")
         updated_fields = result.get("updated_fields")
+        column_updates = result.get("column_updates")
+        field_diff = result.get("field_diff")
         suggestions = result.get("suggested_actions") or [
             "What is the patient health risk under ICH Q9?",
             "Recommend immediate quarantine actions.",
@@ -89,6 +91,8 @@ def copilot_chat(request: ChatRequest):
     else:
         reply = result
         updated_fields = None
+        column_updates = None
+        field_diff = None
         suggestions = [
             "What is the patient health risk under ICH Q9?",
             "Recommend immediate quarantine actions.",
@@ -99,7 +103,9 @@ def copilot_chat(request: ChatRequest):
     return ChatResponse(
         reply=reply,
         suggested_actions=suggestions,
-        updated_fields=updated_fields
+        updated_fields=updated_fields,
+        column_updates=column_updates,
+        field_diff=field_diff
     )
 
 @router.get("/sample-files/{filename}")

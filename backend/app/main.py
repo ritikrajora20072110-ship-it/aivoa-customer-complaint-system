@@ -7,6 +7,13 @@ from .routers import complaints, agent
 
 # Create DB tables
 Base.metadata.create_all(bind=engine)
+try:
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE complaints ADD COLUMN qms_ledger VARCHAR(255) DEFAULT 'LEDGER-2026-QA'"))
+        conn.commit()
+except Exception:
+    pass
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

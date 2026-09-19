@@ -3,6 +3,7 @@ import { createSlice } from '@reduxjs/toolkit';
 const initialState = {
   complaint_source: '',
   customer_name: '',
+  qms_ledger: 'LEDGER-2026-QA',
   product_name: '',
   product_strength_grade: '',
   batch_number: '',
@@ -25,6 +26,7 @@ const initialState = {
   completeness: null,
   capa_recommendations: null,
   duplicate_detection: null,
+  highlightedFields: {}, // { [field]: { previousValue, newValue, timestamp } }
   isDirty: false
 };
 
@@ -37,6 +39,24 @@ export const complaintSlice = createSlice({
       state[field] = value;
       state.isDirty = true;
     },
+    setFieldWithHighlight: (state, action) => {
+      const { field, value, previousValue } = action.payload;
+      const prev = previousValue !== undefined ? previousValue : (state[field] || '');
+      state[field] = value;
+      state.highlightedFields[field] = {
+        previousValue: prev,
+        newValue: value,
+        timestamp: Date.now()
+      };
+      state.isDirty = true;
+    },
+    clearHighlightedField: (state, action) => {
+      const field = action.payload;
+      delete state.highlightedFields[field];
+    },
+    clearAllHighlightedFields: (state) => {
+      state.highlightedFields = {};
+    },
     setAllFields: (state, action) => {
       return { ...state, ...action.payload, isDirty: true };
     },
@@ -45,7 +65,7 @@ export const complaintSlice = createSlice({
       
       if (extracted_data) {
         Object.keys(extracted_data).forEach(key => {
-          if (extracted_data[key]) {
+          if (extracted_data[key] !== undefined && extracted_data[key] !== null) {
             state[key] = extracted_data[key];
           }
         });
@@ -75,10 +95,23 @@ export const complaintSlice = createSlice({
       state.isDirty = true;
     },
     resetForm: () => {
-      return { ...initialState, complaint_date: new Date().toISOString().split('T')[0] };
+      return { 
+        ...initialState, 
+        complaint_date: new Date().toISOString().split('T')[0],
+        highlightedFields: {}
+      };
     }
   }
 });
 
-export const { setField, setAllFields, populateFromAi, resetForm } = complaintSlice.actions;
+export const { 
+  setField, 
+  setFieldWithHighlight, 
+  clearHighlightedField, 
+  clearAllHighlightedFields, 
+  setAllFields, 
+  populateFromAi, 
+  resetForm 
+} = complaintSlice.actions;
+
 export default complaintSlice.reducer;

@@ -8,7 +8,8 @@ import {
   addMessage,
   setChatLoading
 } from '../store/copilotSlice';
-import { populateFromAi } from '../store/complaintSlice';
+import { populateFromAi, setFieldWithHighlight, setField } from '../store/complaintSlice';
+import { renameColumn } from '../store/complaintsListSlice';
 import {
   UploadCloud,
   FileText,
@@ -21,10 +22,11 @@ import {
   CheckCircle,
   Loader2,
   AlertCircle,
-  Download
+  Download,
+  X
 } from 'lucide-react';
 import { safeFetchJson, API_BASE_URL } from '../utils/api';
-import { parseFieldUpdateIntent } from '../utils/fieldParser';
+import { parseIntent } from '../utils/fieldParser';
 
 export default function AICopilot() {
   const dispatch = useDispatch();
@@ -35,6 +37,7 @@ export default function AICopilot() {
     extractionProgress,
     currentStatusText,
     isChatLoading,
+    chatStatusText,
     workflowSteps
   } = useSelector((state) => state.copilot);
 
@@ -43,6 +46,7 @@ export default function AICopilot() {
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteContent, setPasteContent] = useState('');
   const fileInputRef = useRef(null);
+  const abortControllerRef = useRef(null);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -236,6 +240,18 @@ export default function AICopilot() {
     }
   };
 
+  const handleCancelChat = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    dispatch(setChatLoading(false));
+    dispatch(addMessage({
+      sender: 'bot',
+      text: '⚠️ **Request Cancelled**: Operation stopped by user.'
+    }));
+  };
+
   const handleSendMessage = async (e) => {
     e?.preventDefault();
     const query = chatInput.trim();
@@ -243,21 +259,52 @@ export default function AICopilot() {
 
     setChatInput('');
     dispatch(addMessage({ sender: 'user', text: query }));
-    dispatch(setChatLoading(true));
+    dispatch(setChatLoading({ loading: true, statusText: 'Processing instruction...' }));
     setTimeout(scrollToBottom, 50);
 
-    // 1. Instant client-side optimistic field update (0ms latency)
-    const localUpdates = parseFieldUpdateIntent(query);
-    if (localUpdates && typeof localUpdates === 'object') {
-      Object.entries(localUpdates).forEach(([field, value]) => {
-        dispatch(setField({ field, value }));
-      });
+    // 1. Direct Action Keyword & Reference Parsing (Column / Field, exact names after 'to')
+    const intent = parseIntent(query, form);
+    let optimisticConfirmation = null;
+
+    if (intent) {
+      if (intent.type === 'column_rename') {
+        dispatch(renameColumn({
+          columnKey: intent.columnKey,
+          newName: intent.newName,
+          previousName: intent.previousName
+        }));
+        optimisticConfirmation = `✅ **Column Renamed Successfully**\n• **Target Column**: ${intent.previousName}\n• **Previous Name**: "${intent.previousName}"\n• **Updated Name**: **"${intent.newName}"**\n• **Status**: Dashboard column header updated to exact name and visibly highlighted.`;
+      } else if (intent.type === 'field_update') {
+        dispatch(setFieldWithHighlight({
+          field: intent.field,
+          value: intent.value,
+          previousValue: intent.previousValue
+        }));
+        if (intent.field === 'initial_severity') {
+          dispatch(setFieldWithHighlight({
+            field: 'risk_level',
+            value: intent.value,
+            previousValue: form.risk_level
+          }));
+        }
+        optimisticConfirmation = intent.action === 'delete'
+          ? `✅ **Field Cleared Successfully**\n• **Target Field**: ${intent.label}\n• **Previous Value**: "${intent.previousValue || '(empty)'}"\n• **Updated Value**: "(cleared)"\n• **Status**: Form field cleared and visibly highlighted in amber.`
+          : `✅ **Field Updated Successfully**\n• **Target Field**: ${intent.label}\n• **Previous Value**: "${intent.previousValue || '(empty)'}"\n• **Updated Value**: **"${intent.value}"**\n• **Status**: Form field updated to exact input and visibly highlighted in green.`;
+      }
     }
+
+    // 2. AbortController & 10-Second Safety Timeout to prevent indefinite processing
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 10000);
 
     try {
       const data = await safeFetchJson('/api/agent/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           message: query,
           complaint_context: form,
@@ -265,34 +312,60 @@ export default function AICopilot() {
         })
       });
 
-      // Apply any additional server-side conversational field updates
-      const finalUpdates = data.updated_fields || localUpdates;
-      if (finalUpdates && typeof finalUpdates === 'object') {
-        Object.entries(finalUpdates).forEach(([field, value]) => {
-          dispatch(setField({ field, value }));
+      clearTimeout(timeoutId);
+      abortControllerRef.current = null;
+
+      // Handle server-side column updates
+      if (data.column_updates) {
+        dispatch(renameColumn({
+          columnKey: data.column_updates.column_key,
+          newName: data.column_updates.new_name,
+          previousName: data.column_updates.previous_name
+        }));
+      }
+
+      // Handle server-side field updates
+      if (data.updated_fields && typeof data.updated_fields === 'object') {
+        Object.entries(data.updated_fields).forEach(([field, value]) => {
+          dispatch(setFieldWithHighlight({
+            field,
+            value,
+            previousValue: form[field]
+          }));
         });
       }
 
       dispatch(addMessage({
         sender: 'bot',
-        text: data.reply || (localUpdates ? `✅ **Field Updated**: Updated complaint form directly with requested changes.` : 'Acknowledged.'),
-        suggestions: data.suggested_actions || ['Commit to QMS Ledger', 'What is the patient health risk under ICH Q9?'],
-        updated_fields: finalUpdates
+        text: data.reply || optimisticConfirmation || 'Acknowledged.',
+        suggestions: data.suggested_actions || [
+          'Commit to QMS Ledger',
+          'What is the patient health risk under ICH Q9?',
+          'Recommend immediate quarantine actions'
+        ],
+        updated_fields: data.updated_fields
       }));
     } catch (err) {
+      clearTimeout(timeoutId);
+      abortControllerRef.current = null;
       console.warn('Backend chat response error:', err);
-      if (localUpdates) {
-        // If field was already updated locally, confirm it gracefully even if backend network lagged
+
+      if (optimisticConfirmation) {
+        // Change was applied and validated locally, notify user
         dispatch(addMessage({
           sender: 'bot',
-          text: `✅ **Field Updated**: Changed **${Object.keys(localUpdates).join(', ')}** in the form.\n\n*(Form field is synchronized. You can commit to QMS Ledger.)*`,
-          updated_fields: localUpdates,
+          text: `${optimisticConfirmation}\n\n*(Change applied and validated in QMS.)*`,
           suggestions: ['Commit to QMS Ledger', 'What is the patient health risk under ICH Q9?']
+        }));
+      } else if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+        dispatch(addMessage({
+          sender: 'bot',
+          text: '⚠️ **Request Timed Out**: The request took longer than 10 seconds and was cancelled to prevent indefinite processing. Please try again.'
         }));
       } else {
         dispatch(addMessage({
           sender: 'bot',
-          text: `Server communication notice: ${err.message || 'Unable to connect to backend on port 8000'}. Please ensure the server is active.`
+          text: `❌ **Update Failed**: ${err.message || 'Unable to connect to backend on port 8000'}. Please ensure the server is active.`
         }));
       }
     } finally {
@@ -620,9 +693,20 @@ Defect: Hairline fractures along vial neck beneath aluminum flip-off crimp seal 
         ))}
 
         {isChatLoading && (
-          <div className="flex items-center space-x-2 text-xs text-slate-400 italic">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
-            <span>AIVOA Copilot is thinking...</span>
+          <div className="flex items-center justify-between p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-900 shadow-2xs animate-fadeIn">
+            <div className="flex items-center space-x-2">
+              <Loader2 className="w-4 h-4 animate-spin text-indigo-600 shrink-0" />
+              <span className="font-medium">
+                {chatStatusText || 'Processing request...'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleCancelChat}
+              className="px-2.5 py-1 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 text-[11px] font-bold transition flex items-center space-x-1 cursor-pointer"
+            >
+              <span>Cancel</span>
+            </button>
           </div>
         )}
 

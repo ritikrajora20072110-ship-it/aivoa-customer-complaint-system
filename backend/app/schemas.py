@@ -5,6 +5,7 @@ from datetime import datetime
 class ComplaintBase(BaseModel):
     complaint_source: Optional[str] = ""
     customer_name: Optional[str] = ""
+    qms_ledger: Optional[str] = "LEDGER-2026-QA"
     product_name: Optional[str] = ""
     product_strength_grade: Optional[str] = ""
     batch_number: Optional[str] = ""
@@ -33,6 +34,7 @@ class ComplaintUpdate(BaseModel):
     status: Optional[str] = None
     initial_severity: Optional[str] = None
     priority: Optional[str] = None
+    qms_ledger: Optional[str] = None
 
 class ComplaintResponse(ComplaintBase):
     id: int
@@ -45,6 +47,7 @@ class ComplaintResponse(ComplaintBase):
 class ExtractedComplaintData(BaseModel):
     complaint_source: Optional[str] = ""
     customer_name: Optional[str] = ""
+    qms_ledger: Optional[str] = "LEDGER-2026-QA"
     product_name: Optional[str] = ""
     product_strength_grade: Optional[str] = ""
     batch_number: Optional[str] = ""
@@ -108,3 +111,5 @@ class ChatResponse(BaseModel):
     reply: str
     suggested_actions: Optional[List[str]] = []
     updated_fields: Optional[Dict[str, Any]] = None
+    column_updates: Optional[Dict[str, Any]] = None
+    field_diff: Optional[Dict[str, Any]] = None
