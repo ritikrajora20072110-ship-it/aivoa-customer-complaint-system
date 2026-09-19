@@ -59,3 +59,26 @@ def test_conversational_field_update():
     assert data["updated_fields"].get("customer_name") == "Rithvik Kumar"
     assert "Rithvik Kumar" in data["reply"]
 
+def test_sample_file_download():
+    res = client.get("/api/agent/sample-files/ciprofloxacin_sterile_vial_leak.pdf")
+    assert res.status_code == 200
+    assert len(res.content) > 1000
+
+    res2 = client.get("/api/agent/sample-files/amoxicillin_capsule_discoloration.pdf")
+    assert res2.status_code == 200
+    assert len(res2.content) > 1000
+
+def test_sample_pdf_upload_extraction():
+    import os
+    pdf_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../samples/ciprofloxacin_sterile_vial_leak.pdf"))
+    with open(pdf_path, "rb") as f:
+        res = client.post("/api/agent/extract", files={"file": ("ciprofloxacin_sterile_vial_leak.pdf", f, "application/pdf")})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["success"] is True
+    ext = data["extracted_data"]
+    risk = data.get("risk_assessment", {})
+    assert "Ciprofloxacin" in ext.get("product_name", "") or "CIP" in ext.get("batch_number", "")
+    assert ext.get("initial_severity") == "Critical" or risk.get("suggested_severity") == "Critical"
+
+

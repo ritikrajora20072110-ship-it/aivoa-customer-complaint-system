@@ -1,5 +1,7 @@
+import os
 import json
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi.responses import FileResponse
 from typing import Optional
 from ..schemas import ExtractionResponse, ChatRequest, ChatResponse
 from ..agent.parsers import extract_text_from_file
@@ -99,3 +101,17 @@ def copilot_chat(request: ChatRequest):
         suggested_actions=suggestions,
         updated_fields=updated_fields
     )
+
+@router.get("/sample-files/{filename}")
+def download_sample_file(filename: str):
+    """Serve realistic sample pharmaceutical complaint files for testing."""
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../samples"))
+    file_path = os.path.join(base_dir, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Sample file not found.")
+    return FileResponse(
+        file_path,
+        media_type="application/octet-stream",
+        filename=filename
+    )
+

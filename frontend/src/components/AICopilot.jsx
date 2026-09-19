@@ -20,9 +20,10 @@ import {
   Info,
   CheckCircle,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Download
 } from 'lucide-react';
-import { safeFetchJson } from '../utils/api';
+import { safeFetchJson, API_BASE_URL } from '../utils/api';
 import { parseFieldUpdateIntent } from '../utils/fieldParser';
 
 export default function AICopilot() {
@@ -99,6 +100,77 @@ export default function AICopilot() {
       dispatch(addMessage({
         sender: 'bot',
         text: `Extraction error: ${err.message}. You can also paste the raw complaint text directly.`
+      }));
+    } finally {
+      setTimeout(scrollToBottom, 100);
+    }
+  };
+
+  const handleLoadSamplePdf = async (filename) => {
+    dispatch(startExtraction());
+    dispatch(addMessage({
+      sender: 'user',
+      text: `Uploaded sample document: **${filename}**. Please extract all QMS fields.`
+    }));
+
+    const timer1 = setTimeout(() => {
+      dispatch(updateProgress({ progress: 35, statusText: 'Normalizing document and executing LangGraph Entity Extraction Agent...' }));
+    }, 400);
+
+    const timer2 = setTimeout(() => {
+      dispatch(updateProgress({ progress: 70, statusText: 'Evaluating ICH Q9 Patient Risk & Formulating CAPA Plan...' }));
+    }, 900);
+
+    try {
+      let blob = null;
+      try {
+        const localRes = await fetch(`/samples/${filename}`);
+        if (localRes.ok) {
+          blob = await localRes.blob();
+        }
+      } catch (_) {}
+
+      if (!blob) {
+        const fileUrl = `${API_BASE_URL || ''}/api/agent/sample-files/${filename}`;
+        const fileRes = await fetch(fileUrl);
+        if (!fileRes.ok) throw new Error('Could not fetch sample file from server');
+        blob = await fileRes.blob();
+      }
+
+      const mimeType = filename.endsWith('.pdf') ? 'application/pdf' : 'text/plain';
+      const file = new File([blob], filename, { type: mimeType });
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const data = await safeFetchJson('/api/agent/extract', {
+        method: 'POST',
+        body: formData
+      });
+
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+
+      dispatch(finishExtraction({ steps: data.workflow_steps }));
+      dispatch(populateFromAi(data));
+
+      dispatch(addMessage({
+        sender: 'bot',
+        text: data.copilot_message || 'Complaint details extracted successfully from sample document.',
+        suggestions: [
+          'Commit to QMS Ledger',
+          'What is the patient safety impact?',
+          'Show recommended CAPA actions',
+          'Check duplicate batch history'
+        ]
+      }));
+    } catch (err) {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      dispatch(setExtractionError(err.message));
+      dispatch(addMessage({
+        sender: 'bot',
+        text: `Extraction error: ${err.message}`
       }));
     } finally {
       setTimeout(scrollToBottom, 100);
@@ -357,6 +429,106 @@ Defect: Hairline fractures along vial neck beneath aluminum flip-off crimp seal 
         <div className="flex items-center space-x-2 p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/70 text-emerald-800 text-[11px]">
           <Info className="w-4 h-4 text-emerald-600 flex-shrink-0" />
           <span>Supported formats: PDF, DOCX, TXT, EML • Max file size: 10MB</span>
+        </div>
+
+        {/* Sample Files Download & Instant Test Box */}
+        <div className="bg-slate-50/90 rounded-xl p-3 border border-slate-200 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              <span>Sample Test Documents</span>
+            </span>
+            <span className="text-[10px] text-blue-600 font-medium">Download or 1-Click Test</span>
+          </div>
+
+          <div className="space-y-1.5">
+            {/* Sample 1: Ciprofloxacin PDF */}
+            <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs shadow-2xs hover:border-blue-200 transition">
+              <div className="flex items-center space-x-1.5 min-w-0 pr-2">
+                <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                <span className="truncate text-[11px] font-medium text-slate-800" title="Ciprofloxacin Sterile Defect (PDF)">
+                  Cipro_Sterile_Leak.pdf
+                </span>
+                <span className="bg-rose-100 text-rose-700 text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0">Critical</span>
+              </div>
+              <div className="flex items-center space-x-1.5 shrink-0">
+                <a
+                  href="/samples/ciprofloxacin_sterile_vial_leak.pdf"
+                  download="ciprofloxacin_sterile_vial_leak.pdf"
+                  className="p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition"
+                  title="Download PDF to your computer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleLoadSamplePdf('ciprofloxacin_sterile_vial_leak.pdf')}
+                  disabled={isExtracting}
+                  className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-[10px] font-semibold transition cursor-pointer"
+                >
+                  ⚡ Test
+                </button>
+              </div>
+            </div>
+
+            {/* Sample 2: Amoxicillin PDF */}
+            <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs shadow-2xs hover:border-amber-200 transition">
+              <div className="flex items-center space-x-1.5 min-w-0 pr-2">
+                <FileText className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span className="truncate text-[11px] font-medium text-slate-800" title="Amoxicillin Capsule Discoloration (PDF)">
+                  Amox_Discoloration.pdf
+                </span>
+                <span className="bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0">Major</span>
+              </div>
+              <div className="flex items-center space-x-1.5 shrink-0">
+                <a
+                  href="/samples/amoxicillin_capsule_discoloration.pdf"
+                  download="amoxicillin_capsule_discoloration.pdf"
+                  className="p-1 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded transition"
+                  title="Download PDF to your computer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleLoadSamplePdf('amoxicillin_capsule_discoloration.pdf')}
+                  disabled={isExtracting}
+                  className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded text-[10px] font-semibold transition cursor-pointer"
+                >
+                  ⚡ Test
+                </button>
+              </div>
+            </div>
+
+            {/* Sample 3: Email format */}
+            <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs shadow-2xs hover:border-indigo-200 transition">
+              <div className="flex items-center space-x-1.5 min-w-0 pr-2">
+                <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                <span className="truncate text-[11px] font-medium text-slate-800" title="Hospital Pharmacy Complaint (EML)">
+                  Hospital_Complaint.eml
+                </span>
+                <span className="bg-indigo-100 text-indigo-700 text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0">EML</span>
+              </div>
+              <div className="flex items-center space-x-1.5 shrink-0">
+                <a
+                  href="/samples/amoxicillin_capsule_discoloration.eml"
+                  download="amoxicillin_capsule_discoloration.eml"
+                  className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition"
+                  title="Download EML to your computer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleLoadSamplePdf('amoxicillin_capsule_discoloration.eml')}
+                  disabled={isExtracting}
+                  className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded text-[10px] font-semibold transition cursor-pointer"
+                >
+                  ⚡ Test
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* EXTRACTION PROGRESS SECTION */}
