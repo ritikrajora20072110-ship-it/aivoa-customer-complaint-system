@@ -1,4 +1,4 @@
-# AIVOA — AI-Powered Customer Complaint Management System
+# AI-Powered Customer Complaint Management System
 ---
 
 ## 1. Executive Summary & Objective
