@@ -3,57 +3,78 @@
 export const API_BASE_URL = 
   import.meta.env.VITE_API_BASE_URL || 
   (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://127.0.0.1:8000' 
+    ? `${window.location.protocol}//${window.location.hostname}:8000` 
     : '');
 
 /**
  * Robust fetch wrapper that:
- * 1. Dispatches directly to http://127.0.0.1:8000 in dev (bypassing any Node proxy EPERM issues)
- * 2. Safely parses response text to avoid "Unexpected end of JSON input" errors
- * 3. Gracefully provides readable error messages if backend is unreachable
+ * 1. Tries direct port 8000 connection matching user's current hostname (localhost or 127.0.0.1)
+ * 2. Tries alternative local IP/host if preflight or network error occurs
+ * 3. Gracefully parses text and JSON without unexpected end-of-input crashes
  */
 export async function safeFetchJson(endpoint, options = {}) {
-  const primaryUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
-  
-  let response;
-  try {
-    response = await fetch(primaryUrl, options);
-  } catch (primaryErr) {
-    // If direct connection failed, attempt relative path fallback
-    if (!endpoint.startsWith('http') && API_BASE_URL) {
-      try {
-        response = await fetch(endpoint, options);
-      } catch (fallbackErr) {
-        throw new Error(
-          `Cannot reach QMS backend at ${primaryUrl}. Make sure the FastAPI server is running at http://127.0.0.1:8000.`
-        );
+  const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+  const altHost = host === 'localhost' ? '127.0.0.1' : 'localhost';
+  const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
+
+  const candidates = [];
+  if (endpoint.startsWith('http')) {
+    candidates.push(endpoint);
+  } else {
+    // 1. Direct host matching browser origin
+    candidates.push(`${protocol}//${host}:8000${endpoint}`);
+    // 2. Alternative host
+    candidates.push(`${protocol}//${altHost}:8000${endpoint}`);
+    // 3. Relative path (Vite proxy fallback)
+    candidates.push(endpoint);
+  }
+
+  let response = null;
+  let lastError = null;
+
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok) {
+        response = res;
+        break;
       }
-    } else {
-      throw new Error(`Connection error: Failed to connect to ${primaryUrl}.`);
+      
+      const raw = await res.text();
+      let errorMsg = `Server error (HTTP ${res.status})`;
+      try {
+        const json = JSON.parse(raw);
+        errorMsg = json.detail || json.message || errorMsg;
+      } catch (_) {
+        if (raw && raw.length < 150) errorMsg = raw;
+      }
+      
+      lastError = new Error(errorMsg);
+      // If it's a client 4xx validation error, don't retry other candidates
+      if (res.status >= 400 && res.status < 500) {
+        throw lastError;
+      }
+    } catch (err) {
+      lastError = err;
+      // If it was an explicit client error thrown above, rethrow
+      if (err.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError')) {
+        throw err;
+      }
     }
+  }
+
+  if (!response) {
+    throw lastError || new Error(`Unable to reach QMS backend on port 8000. Please ensure the server is running.`);
   }
 
   const rawText = await response.text();
-  let parsedJson = null;
-
-  if (rawText && rawText.trim()) {
-    try {
-      parsedJson = JSON.parse(rawText);
-    } catch (parseError) {
-      // Content is not valid JSON
-      if (!response.ok) {
-        throw new Error(`Server returned HTTP ${response.status}: ${rawText.slice(0, 150)}`);
-      }
-    }
+  if (!rawText || !rawText.trim()) {
+    return {};
   }
 
-  if (!response.ok) {
-    const errorMsg =
-      parsedJson?.detail ||
-      parsedJson?.message ||
-      `Request failed with HTTP status ${response.status}`;
-    throw new Error(errorMsg);
+  try {
+    return JSON.parse(rawText);
+  } catch (parseError) {
+    return { text: rawText };
   }
-
-  return parsedJson;
 }
