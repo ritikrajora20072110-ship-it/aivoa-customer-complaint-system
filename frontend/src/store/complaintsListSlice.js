@@ -1,12 +1,11 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { safeFetchJson } from '../utils/api';
 
 export const fetchComplaints = createAsyncThunk(
   'complaintsList/fetchComplaints',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await fetch('/api/complaints');
-      if (!response.ok) throw new Error('Failed to fetch complaints');
-      return await response.json();
+      return await safeFetchJson('/api/complaints');
     } catch (err) {
       return rejectWithValue(err.message);
     }
@@ -17,13 +16,11 @@ export const saveComplaint = createAsyncThunk(
   'complaintsList/saveComplaint',
   async (complaintData, { rejectWithValue }) => {
     try {
-      const response = await fetch('/api/complaints', {
+      return await safeFetchJson('/api/complaints', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(complaintData)
       });
-      if (!response.ok) throw new Error('Failed to save complaint');
-      return await response.json();
     } catch (err) {
       return rejectWithValue(err.message);
     }
@@ -34,13 +31,11 @@ export const updateComplaintStatus = createAsyncThunk(
   'complaintsList/updateComplaintStatus',
   async ({ id, status, severity, priority }, { rejectWithValue }) => {
     try {
-      const response = await fetch(`/api/complaints/${id}`, {
+      return await safeFetchJson(`/api/complaints/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, initial_severity: severity, priority })
       });
-      if (!response.ok) throw new Error('Failed to update complaint');
-      return await response.json();
     } catch (err) {
       return rejectWithValue(err.message);
     }

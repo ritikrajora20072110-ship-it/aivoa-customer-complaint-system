@@ -22,6 +22,7 @@ import {
   Loader2,
   AlertCircle
 } from 'lucide-react';
+import { safeFetchJson } from '../utils/api';
 
 export default function AICopilot() {
   const dispatch = useDispatch();
@@ -68,20 +69,13 @@ export default function AICopilot() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/agent/extract', {
+      const data = await safeFetchJson('/api/agent/extract', {
         method: 'POST',
         body: formData
       });
 
       clearTimeout(timer1);
       clearTimeout(timer2);
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || 'Extraction failed');
-      }
-
-      const data = await response.json();
 
       dispatch(finishExtraction({ steps: data.workflow_steps }));
       dispatch(populateFromAi(data));
@@ -134,20 +128,13 @@ export default function AICopilot() {
       const formData = new FormData();
       formData.append('text', textToExtract);
 
-      const response = await fetch('/api/agent/extract', {
+      const data = await safeFetchJson('/api/agent/extract', {
         method: 'POST',
         body: formData
       });
 
       clearTimeout(timer1);
       clearTimeout(timer2);
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || 'Extraction failed');
-      }
-
-      const data = await response.json();
 
       dispatch(finishExtraction({ steps: data.workflow_steps }));
       dispatch(populateFromAi(data));
@@ -187,7 +174,7 @@ export default function AICopilot() {
     setTimeout(scrollToBottom, 50);
 
     try {
-      const response = await fetch('/api/agent/chat', {
+      const data = await safeFetchJson('/api/agent/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -196,9 +183,6 @@ export default function AICopilot() {
           chat_history: messages.map(m => ({ sender: m.sender, text: m.text }))
         })
       });
-
-      if (!response.ok) throw new Error('Chat service unavailable');
-      const data = await response.json();
 
       dispatch(addMessage({
         sender: 'bot',
